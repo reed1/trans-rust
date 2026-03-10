@@ -5,7 +5,7 @@ import os
 
 from lxml import etree
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "raw")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "storage", "raw")
 TEI_FILE = os.path.join(RAW_DIR, "freedict_eng_ind.tei")
 NS = {"tei": "http://www.tei-c.org/ns/1.0"}
 

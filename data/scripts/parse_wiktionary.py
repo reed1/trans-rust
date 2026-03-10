@@ -4,7 +4,7 @@ import gzip
 import json
 import os
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "raw")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "storage", "raw")
 
 FILES = {
     "kaikki_en.jsonl.gz": ("en", "en"),

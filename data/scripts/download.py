@@ -1,4 +1,4 @@
-"""Download raw dictionary data to scripts/raw/."""
+"""Download raw dictionary data to data/storage/raw/."""
 
 import io
 import lzma
@@ -7,7 +7,7 @@ import tarfile
 
 import requests
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "raw")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "storage", "raw")
 
 FREEDICT_TARBALL = "https://download.freedict.org/dictionaries/eng-ind/2025.11.23/freedict-eng-ind-2025.11.23.src.tar.xz"
 KAIKKI_SOURCES = {

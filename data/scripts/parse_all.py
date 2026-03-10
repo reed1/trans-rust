@@ -1,4 +1,4 @@
-"""Orchestrator: run all parsers, output scripts/parsed/entries.jsonl."""
+"""Orchestrator: run all parsers, output data/storage/parsed/entries.jsonl."""
 
 import json
 import os
@@ -6,7 +6,7 @@ import os
 import parse_freedict
 import parse_wiktionary
 
-PARSED_DIR = os.path.join(os.path.dirname(__file__), "parsed")
+PARSED_DIR = os.path.join(os.path.dirname(__file__), "..", "storage", "parsed")
 OUTPUT_FILE = os.path.join(PARSED_DIR, "entries.jsonl")
 
 

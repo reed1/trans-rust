@@ -1011,6 +1011,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "trans-cli"
+version = "0.1.0"
+dependencies = [
+ "tantivy",
+ "trans-core",
+]
+
+[[package]]
 name = "trans-core"
 version = "0.1.0"
 dependencies = [
@@ -1024,14 +1032,6 @@ name = "trans-indexer"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "tantivy",
- "trans-core",
-]
-
-[[package]]
-name = "trans-tui"
-version = "0.1.0"
-dependencies = [
  "tantivy",
  "trans-core",
 ]

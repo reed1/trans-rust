@@ -12,7 +12,7 @@ fn main() {
     let jsonl_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("scripts/parsed/entries.jsonl");
+        .join("data/storage/parsed/entries.jsonl");
 
     if !jsonl_path.exists() {
         eprintln!(
