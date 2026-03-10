@@ -1,0 +1,8 @@
+[package]
+name = "trans-tui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+trans-core = { path = "../core" }
+tantivy = "0.22"
