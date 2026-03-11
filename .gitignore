@@ -1,2 +1,5 @@
+__pycache__/
+
+# project specific
 /target
 /data/storage/

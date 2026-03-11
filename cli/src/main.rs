@@ -1,47 +1,75 @@
 mod index;
-mod language;
 
-use index::SearchIndex;
-use language::LanguagePair;
+use index::{SearchIndex, SearchResult};
+
+fn parse_lang_pair(s: &str) -> (&str, &str) {
+    match s {
+        "en-id" => ("en", "id"),
+        "id-en" => ("id", "en"),
+        _ => {
+            eprintln!("Unknown language pair: {s}\nSupported: en-id, id-en");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn print_results(results: &[SearchResult]) {
+    let mut last_word = String::new();
+    for r in results {
+        if r.word != last_word {
+            let pron = if r.pronunciation.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", r.pronunciation)
+            };
+            let pos = if r.pos.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", r.pos)
+            };
+            println!("{}{}{}", r.word, pron, pos);
+            last_word = r.word.clone();
+        }
+        println!("  {} [{}]", r.definition, r.source);
+    }
+}
+
+fn lookup(idx: &SearchIndex, word: &str, lang: Option<(&str, &str)>) {
+    let exact = idx.search_exact(word, lang, 10);
+    if !exact.is_empty() {
+        print_results(&exact);
+        return;
+    }
+
+    let fuzzy = idx.search_fuzzy(word, lang, 5);
+    if !fuzzy.is_empty() {
+        println!("Did you mean: {}?", fuzzy[0].word);
+        println!();
+        print_results(&fuzzy);
+        return;
+    }
+
+    eprintln!("No results found.");
+    std::process::exit(1);
+}
+
+fn usage() -> ! {
+    eprintln!("Usage: trans [-l en-id|id-en] <word>");
+    std::process::exit(1);
+}
 
 fn main() {
-    let supported_pairs = LanguagePair::supported_pairs();
+    let args: Vec<String> = std::env::args().skip(1).collect();
 
-    println!("trans-cli - Offline Translation Tool");
-    println!("Supported language pairs:");
-    for pair in &supported_pairs {
-        println!("  {} -> {}", pair.from, pair.to);
-    }
+    let (lang, word) = match args.len() {
+        1 => (None, args[0].as_str()),
+        3 if args[0] == "-l" => {
+            let (src, tgt) = parse_lang_pair(&args[1]);
+            (Some((src, tgt)), args[2].as_str())
+        }
+        _ => usage(),
+    };
 
     let idx = SearchIndex::open();
-
-    // Test query
-    let results = idx.search("ability", "en", "id", 5);
-    println!("\nTest query: \"ability\" (en->id)");
-    if results.is_empty() {
-        println!("  No results found.");
-    }
-    for r in &results {
-        let pron = if r.pronunciation.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", r.pronunciation)
-        };
-        let pos = if r.pos.is_empty() {
-            String::new()
-        } else {
-            format!(" ({})", r.pos)
-        };
-        println!("  {}{}{} → {} [{}]", r.word, pron, pos, r.definition, r.source);
-    }
-
-    // Test fuzzy query (typo)
-    let results = idx.search("abilty", "en", "id", 5);
-    println!("\nFuzzy test: \"abilty\" (en->id)");
-    if results.is_empty() {
-        println!("  No results found.");
-    }
-    for r in &results {
-        println!("  {} → {} [{}]", r.word, r.definition, r.source);
-    }
+    lookup(&idx, word, lang);
 }

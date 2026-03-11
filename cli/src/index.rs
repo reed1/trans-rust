@@ -1,7 +1,7 @@
 use tantivy::collector::TopDocs;
-use tantivy::query::{BooleanQuery, FuzzyTermQuery, Occur};
-use tantivy::schema::{Field, Value};
-use tantivy::{Index, IndexReader, Term};
+use tantivy::query::{BooleanQuery, FuzzyTermQuery, Occur, TermQuery};
+use tantivy::schema::{Field, IndexRecordOption, Value};
+use tantivy::{Index, IndexReader, Searcher, Term};
 
 use trans_core::schema::{build_schema, data_dir};
 
@@ -22,8 +22,6 @@ pub struct SearchResult {
     pub definition: String,
     pub pos: String,
     pub pronunciation: String,
-    pub source_lang: String,
-    pub target_lang: String,
     pub source: String,
 }
 
@@ -59,29 +57,65 @@ impl SearchIndex {
         }
     }
 
-    pub fn search(
+    pub fn search_exact(
         &self,
         query: &str,
-        src_lang: &str,
-        tgt_lang: &str,
+        lang: Option<(&str, &str)>,
+        limit: usize,
+    ) -> Vec<SearchResult> {
+        let searcher = self.reader.searcher();
+        let term = Term::from_field_text(self.word_lower, &query.to_lowercase());
+        let term_query = TermQuery::new(term, IndexRecordOption::Basic);
+
+        let combined = self.build_query(Box::new(term_query), lang);
+        self.collect_results(&searcher, &combined, limit)
+    }
+
+    pub fn search_fuzzy(
+        &self,
+        query: &str,
+        lang: Option<(&str, &str)>,
         limit: usize,
     ) -> Vec<SearchResult> {
         let searcher = self.reader.searcher();
         let term = Term::from_field_text(self.word_lower, &query.to_lowercase());
         let fuzzy = FuzzyTermQuery::new(term, 1, true);
 
-        let src_term = Term::from_field_text(self.source_lang, src_lang);
-        let tgt_term = Term::from_field_text(self.target_lang, tgt_lang);
-        let src_query = tantivy::query::TermQuery::new(src_term, tantivy::schema::IndexRecordOption::Basic);
-        let tgt_query = tantivy::query::TermQuery::new(tgt_term, tantivy::schema::IndexRecordOption::Basic);
+        let combined = self.build_query(Box::new(fuzzy), lang);
+        self.collect_results(&searcher, &combined, limit)
+    }
 
-        let combined = BooleanQuery::new(vec![
-            (Occur::Must, Box::new(fuzzy)),
-            (Occur::Must, Box::new(src_query)),
-            (Occur::Must, Box::new(tgt_query)),
-        ]);
+    fn build_query(
+        &self,
+        main_query: Box<dyn tantivy::query::Query>,
+        lang: Option<(&str, &str)>,
+    ) -> BooleanQuery {
+        let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> =
+            vec![(Occur::Must, main_query)];
 
-        let top_docs = searcher.search(&combined, &TopDocs::with_limit(limit)).unwrap();
+        if let Some((src, tgt)) = lang {
+            let src_term = Term::from_field_text(self.source_lang, src);
+            let tgt_term = Term::from_field_text(self.target_lang, tgt);
+            clauses.push((
+                Occur::Must,
+                Box::new(TermQuery::new(src_term, IndexRecordOption::Basic)),
+            ));
+            clauses.push((
+                Occur::Must,
+                Box::new(TermQuery::new(tgt_term, IndexRecordOption::Basic)),
+            ));
+        }
+
+        BooleanQuery::new(clauses)
+    }
+
+    fn collect_results(
+        &self,
+        searcher: &Searcher,
+        query: &BooleanQuery,
+        limit: usize,
+    ) -> Vec<SearchResult> {
+        let top_docs = searcher.search(query, &TopDocs::with_limit(limit)).unwrap();
 
         top_docs
             .into_iter()
@@ -98,8 +132,6 @@ impl SearchIndex {
                     definition: get(self.definition),
                     pos: get(self.pos),
                     pronunciation: get(self.pronunciation),
-                    source_lang: get(self.source_lang),
-                    target_lang: get(self.target_lang),
                     source: get(self.source),
                 }
             })
