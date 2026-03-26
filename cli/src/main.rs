@@ -1,6 +1,4 @@
-mod index;
-
-use index::{SearchIndex, SearchResult};
+use trans_core::search::{SearchIndex, SearchResult};
 
 fn parse_lang_pair(s: &str) -> (&str, &str) {
     match s {
@@ -35,22 +33,19 @@ fn print_results(results: &[SearchResult]) {
 }
 
 fn lookup(idx: &SearchIndex, word: &str, lang: Option<(&str, &str)>) {
-    let exact = idx.search_exact(word, lang, 10);
-    if !exact.is_empty() {
-        print_results(&exact);
-        return;
+    let output = idx.search(word, lang);
+
+    if output.entries.is_empty() {
+        eprintln!("No results found.");
+        std::process::exit(1);
     }
 
-    let fuzzy = idx.search_fuzzy(word, lang, 5);
-    if !fuzzy.is_empty() {
-        println!("Did you mean: {}?", fuzzy[0].word);
+    if !output.exact {
+        println!("Did you mean: {}?", output.entries[0].word);
         println!();
-        print_results(&fuzzy);
-        return;
     }
 
-    eprintln!("No results found.");
-    std::process::exit(1);
+    print_results(&output.entries);
 }
 
 fn usage() -> ! {

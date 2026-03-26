@@ -1,7 +1,9 @@
 [package]
-name = "trans-cli"
+name = "trans-gui"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 trans-core = { path = "../core" }
+gpui = "0.2.2"
+gpui-component = "0.5.1"

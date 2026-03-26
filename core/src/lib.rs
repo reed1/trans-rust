@@ -1,4 +1,5 @@
 pub mod schema;
+pub mod search;
 
 use serde::{Deserialize, Serialize};
 

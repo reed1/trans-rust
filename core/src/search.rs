@@ -3,7 +3,7 @@ use tantivy::query::{BooleanQuery, FuzzyTermQuery, Occur, TermQuery};
 use tantivy::schema::{Field, IndexRecordOption, Value};
 use tantivy::{Index, IndexReader, Searcher, Term};
 
-use trans_core::schema::{build_schema, data_dir};
+use crate::schema::{build_schema, data_dir};
 
 pub struct SearchIndex {
     reader: IndexReader,
@@ -15,6 +15,12 @@ pub struct SearchIndex {
     source_lang: Field,
     target_lang: Field,
     source: Field,
+}
+
+pub struct SearchOutput {
+    pub query: String,
+    pub exact: bool,
+    pub entries: Vec<SearchResult>,
 }
 
 pub struct SearchResult {
@@ -54,6 +60,24 @@ impl SearchIndex {
             source_lang: schema.get_field("source_lang").unwrap(),
             target_lang: schema.get_field("target_lang").unwrap(),
             source: schema.get_field("source").unwrap(),
+        }
+    }
+
+    pub fn search(&self, query: &str, lang: Option<(&str, &str)>) -> SearchOutput {
+        let exact = self.search_exact(query, lang, 20);
+        if !exact.is_empty() {
+            return SearchOutput {
+                query: query.to_string(),
+                exact: true,
+                entries: exact,
+            };
+        }
+
+        let fuzzy = self.search_fuzzy(query, lang, 10);
+        SearchOutput {
+            query: query.to_string(),
+            exact: fuzzy.is_empty(),
+            entries: fuzzy,
         }
     }
 
