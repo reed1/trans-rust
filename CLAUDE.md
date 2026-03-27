@@ -7,8 +7,7 @@ Offline Indonesian-English dictionary. Tantivy-powered search index shared acros
 - `core/` — shared library: Tantivy schema, `Entry` struct, data path helpers
 - `indexer/` — binary: reads JSONL → builds Tantivy index
 - `cli/` — one-shot lookup: `trans-cli <word>` prints results and exits
-- `tui/` — (planned) interactive terminal UI with live search suggestions
-- `tauri/` — (planned) desktop app
+- `gui/` — GPUI desktop app with live search and dark/light theme
 
 ## Data Pipeline
 
