@@ -5,12 +5,13 @@ use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::{ActiveTheme, Root, Theme};
 
-use trans_core::provider::{LocalProvider, Provider};
+use trans_core::provider::{GoogleProvider, LocalProvider, Provider};
 use trans_core::search::SearchOutput;
 
 actions!(trans_gui, [ClearInput]);
 
 const SCROLL_AMOUNT: f32 = 400.0;
+const LOCAL_MIN_LENGTH: usize = 3;
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
@@ -28,6 +29,7 @@ struct AppView {
     provider: LocalProvider,
     scroll_handle: ScrollHandle,
     debounce_task: Option<Task<()>>,
+    google_task: Option<Task<()>>,
     _subscription: Subscription,
 }
 
@@ -37,23 +39,45 @@ impl AppView {
         input.update(cx, |input, cx| input.focus(window, cx));
 
         let subscription = cx.subscribe(&input, |this: &mut AppView, input_entity, event: &InputEvent, cx| {
-            if let InputEvent::Change = event {
-                let text = input_entity.read(cx).value().to_string();
-                if text.len() >= 3 {
-                    this.debounce_task = Some(cx.spawn(async move |weak, cx| {
-                        Timer::after(Duration::from_millis(300)).await;
-                        weak.update(cx, |this, cx| {
-                            this.output = Some(this.provider.search(&text, ("", "")));
-                            this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
-                            cx.notify();
-                        })
-                        .ok();
-                    }));
-                } else {
-                    this.debounce_task = None;
-                    this.output = None;
-                    cx.notify();
+            match event {
+                InputEvent::Change => {
+                    let text = input_entity.read(cx).value().to_string();
+                    this.google_task = None;
+                    if text.len() >= LOCAL_MIN_LENGTH {
+                        this.debounce_task = Some(cx.spawn(async move |weak, cx| {
+                            Timer::after(Duration::from_millis(300)).await;
+                            weak.update(cx, |this, cx| {
+                                this.output = Some(this.provider.search(&text, ("", "")));
+                                this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
+                                cx.notify();
+                            })
+                            .ok();
+                        }));
+                    } else {
+                        this.debounce_task = None;
+                        this.output = None;
+                        cx.notify();
+                    }
                 }
+                InputEvent::PressEnter { .. } => {
+                    let text = input_entity.read(cx).value().to_string();
+                    if !text.is_empty() {
+                        let query = text.clone();
+                        this.google_task = Some(cx.spawn(async move |weak, cx| {
+                            let output = GoogleProvider.search(&query, ("id", "en"));
+                            weak.update(cx, |this, cx| {
+                                let current = this.input.read(cx).value().to_string();
+                                if current == query {
+                                    this.output = Some(output);
+                                    this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
+                                    cx.notify();
+                                }
+                            })
+                            .ok();
+                        }));
+                    }
+                }
+                _ => {}
             }
         });
 
@@ -63,6 +87,7 @@ impl AppView {
             provider: LocalProvider::new(),
             scroll_handle: ScrollHandle::new(),
             debounce_task: None,
+            google_task: None,
             _subscription: subscription,
         }
     }
@@ -243,6 +268,11 @@ fn main() {
             KeyBinding::new(
                 "ctrl-w",
                 gpui_component::input::DeleteToPreviousWordStart,
+                Some("Input"),
+            ),
+            KeyBinding::new(
+                "ctrl-h",
+                gpui_component::input::Backspace,
                 Some("Input"),
             ),
             KeyBinding::new("ctrl-l", ClearInput, None),
