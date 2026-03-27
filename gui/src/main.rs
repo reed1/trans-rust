@@ -5,7 +5,8 @@ use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::{ActiveTheme, Root, Theme};
 
-use trans_core::search::{SearchIndex, SearchOutput};
+use trans_core::provider::{LocalProvider, Provider};
+use trans_core::search::SearchOutput;
 
 actions!(trans_gui, [ClearInput]);
 
@@ -24,7 +25,7 @@ macro_rules! log {
 struct AppView {
     input: Entity<InputState>,
     output: Option<SearchOutput>,
-    search_index: SearchIndex,
+    provider: LocalProvider,
     scroll_handle: ScrollHandle,
     debounce_task: Option<Task<()>>,
     _subscription: Subscription,
@@ -42,7 +43,7 @@ impl AppView {
                     this.debounce_task = Some(cx.spawn(async move |weak, cx| {
                         Timer::after(Duration::from_millis(300)).await;
                         weak.update(cx, |this, cx| {
-                            this.output = Some(this.search_index.search(&text, None));
+                            this.output = Some(this.provider.search(&text, ("", "")));
                             this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
                             cx.notify();
                         })
@@ -59,7 +60,7 @@ impl AppView {
         AppView {
             input,
             output: None,
-            search_index: SearchIndex::open(),
+            provider: LocalProvider::new(),
             scroll_handle: ScrollHandle::new(),
             debounce_task: None,
             _subscription: subscription,
@@ -97,13 +98,15 @@ impl Render for AppView {
                         .child(format!("No results for \"{}\"", output.query)),
                 );
             } else if !output.exact {
-                content = content.child(
-                    div()
-                        .text_size(px(14.0))
-                        .text_color(theme.link)
-                        .pb(px(4.0))
-                        .child(format!("Did you mean: {}?", output.entries[0].word)),
-                );
+                if let Some(suggestion) = &output.suggestion {
+                    content = content.child(
+                        div()
+                            .text_size(px(14.0))
+                            .text_color(theme.link)
+                            .pb(px(4.0))
+                            .child(format!("Did you mean: {}?", suggestion)),
+                    );
+                }
             } else {
                 content = content.child(
                     div()

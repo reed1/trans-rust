@@ -1,4 +1,5 @@
-use trans_core::search::{SearchIndex, SearchResult};
+use trans_core::provider::{GoogleProvider, LocalProvider, Provider};
+use trans_core::search::SearchResult;
 
 fn parse_lang_pair(s: &str) -> (&str, &str) {
     match s {
@@ -32,8 +33,64 @@ fn print_results(results: &[SearchResult]) {
     }
 }
 
-fn lookup(idx: &SearchIndex, word: &str, lang: Option<(&str, &str)>) {
-    let output = idx.search(word, lang);
+fn usage() -> ! {
+    eprintln!("Usage: trans [-l en-id|id-en] [-p local|google] <word>");
+    std::process::exit(1);
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    let mut lang_str: Option<&str> = None;
+    let mut provider_name = "local";
+    let mut word: Option<&str> = None;
+    let mut i = 0;
+
+    while i < args.len() {
+        match args[i].as_str() {
+            "-l" => {
+                i += 1;
+                if i >= args.len() {
+                    usage();
+                }
+                lang_str = Some(args[i].as_str());
+            }
+            "-p" => {
+                i += 1;
+                if i >= args.len() {
+                    usage();
+                }
+                provider_name = args[i].as_str();
+            }
+            _ if word.is_none() => {
+                word = Some(args[i].as_str());
+            }
+            _ => usage(),
+        }
+        i += 1;
+    }
+
+    let word = match word {
+        Some(w) => w,
+        None => usage(),
+    };
+
+    let lang = match (lang_str, provider_name) {
+        (Some(l), _) => parse_lang_pair(l),
+        (None, "google") => ("id", "en"),
+        (None, _) => ("", ""),
+    };
+
+    let provider: Box<dyn Provider> = match provider_name {
+        "local" => Box::new(LocalProvider::new()),
+        "google" => Box::new(GoogleProvider),
+        _ => {
+            eprintln!("Unknown provider: {provider_name}\nSupported: local, google");
+            std::process::exit(1);
+        }
+    };
+
+    let output = provider.search(word, lang);
 
     if output.entries.is_empty() {
         eprintln!("No results found.");
@@ -41,30 +98,11 @@ fn lookup(idx: &SearchIndex, word: &str, lang: Option<(&str, &str)>) {
     }
 
     if !output.exact {
-        println!("Did you mean: {}?", output.entries[0].word);
-        println!();
+        if let Some(suggestion) = &output.suggestion {
+            println!("Did you mean: {}?", suggestion);
+            println!();
+        }
     }
 
     print_results(&output.entries);
-}
-
-fn usage() -> ! {
-    eprintln!("Usage: trans [-l en-id|id-en] <word>");
-    std::process::exit(1);
-}
-
-fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-
-    let (lang, word) = match args.len() {
-        1 => (None, args[0].as_str()),
-        3 if args[0] == "-l" => {
-            let (src, tgt) = parse_lang_pair(&args[1]);
-            (Some((src, tgt)), args[2].as_str())
-        }
-        _ => usage(),
-    };
-
-    let idx = SearchIndex::open();
-    lookup(&idx, word, lang);
 }

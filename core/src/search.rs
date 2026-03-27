@@ -20,6 +20,7 @@ pub struct SearchIndex {
 pub struct SearchOutput {
     pub query: String,
     pub exact: bool,
+    pub suggestion: Option<String>,
     pub entries: Vec<SearchResult>,
 }
 
@@ -69,14 +70,17 @@ impl SearchIndex {
             return SearchOutput {
                 query: query.to_string(),
                 exact: true,
+                suggestion: None,
                 entries: exact,
             };
         }
 
         let fuzzy = self.search_fuzzy(query, lang, 10);
+        let suggestion = fuzzy.first().map(|r| r.word.clone());
         SearchOutput {
             query: query.to_string(),
             exact: fuzzy.is_empty(),
+            suggestion,
             entries: fuzzy,
         }
     }
