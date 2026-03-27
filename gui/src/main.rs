@@ -10,6 +10,8 @@ use trans_core::search::SearchOutput;
 
 actions!(trans_gui, [ClearInput]);
 
+const WINDOW_WIDTH: f32 = 800.0;
+const WINDOW_HEIGHT: f32 = 550.0;
 const SCROLL_AMOUNT: f32 = 400.0;
 const LOCAL_MIN_LENGTH: usize = 3;
 
@@ -295,7 +297,11 @@ fn main() {
         ]);
 
         let options = WindowOptions {
-            window_min_size: Some(size(px(300.0), px(300.0))),
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                None,
+                size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)),
+                cx,
+            ))),
             app_id: Some("trans-gui".into()),
             kind: WindowKind::PopUp,
             focus: true,
