@@ -10,7 +10,7 @@ use gpui_component::{ActiveTheme, Root, Theme};
 use trans_core::provider::{GoogleProvider, LocalProvider, Provider};
 use trans_core::search::SearchOutput;
 
-actions!(trans_gui, [ClearInput, PlayAudio]);
+actions!(trans_gui, [ClearInput, PlayAudio, ApplySuggestion]);
 
 const WINDOW_WIDTH: f32 = 800.0;
 const WINDOW_HEIGHT: f32 = 550.0;
@@ -46,6 +46,7 @@ pub fn run() {
             ),
             KeyBinding::new("ctrl-l", ClearInput, None),
             KeyBinding::new("ctrl-o", PlayAudio, None),
+            KeyBinding::new("ctrl-m", ApplySuggestion, None),
         ]);
 
         let options = WindowOptions {
@@ -217,6 +218,23 @@ impl AppView {
         }));
     }
 
+    fn apply_suggestion(
+        &mut self,
+        _: &ApplySuggestion,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let suggestion = self
+            .output
+            .as_ref()
+            .and_then(|o| o.suggestion.clone())
+            .unwrap_or_default();
+        if !suggestion.is_empty() {
+            self.input
+                .update(cx, |input, cx| input.set_value(&suggestion, window, cx));
+        }
+    }
+
     fn clear_input(&mut self, _: &ClearInput, window: &mut Window, cx: &mut Context<Self>) {
         self.input
             .update(cx, |input, cx| input.set_value("", window, cx));
@@ -256,6 +274,7 @@ impl Render for AppView {
             .text_color(theme.foreground)
             .on_action(cx.listener(Self::clear_input))
             .on_action(cx.listener(Self::play_audio))
+            .on_action(cx.listener(Self::apply_suggestion))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 log!(
                     "key_down: key={:?} ctrl={}",
