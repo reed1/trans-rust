@@ -64,7 +64,23 @@ impl AppView {
                     if !text.is_empty() {
                         let query = text.clone();
                         this.google_task = Some(cx.spawn(async move |weak, cx| {
-                            let output = GoogleProvider.search(&query, ("id", "en"));
+                            let q1 = query.clone();
+                            let q2 = query.clone();
+                            let (id_en, en_id) = std::thread::scope(|s| {
+                                let h1 = s.spawn(move || GoogleProvider.search(&q1, ("id", "en")));
+                                let h2 = s.spawn(move || GoogleProvider.search(&q2, ("en", "id")));
+                                (h1.join().ok(), h2.join().ok())
+                            });
+                            let id_en = id_en.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
+                            let en_id = en_id.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
+                            let mut entries = id_en.entries;
+                            entries.extend(en_id.entries);
+                            let output = SearchOutput {
+                                query: query.clone(),
+                                exact: id_en.exact && en_id.exact,
+                                suggestion: id_en.suggestion.or(en_id.suggestion),
+                                entries,
+                            };
                             weak.update(cx, |this, cx| {
                                 let current = this.input.read(cx).value().to_string();
                                 if current == query {
@@ -279,7 +295,7 @@ fn main() {
         ]);
 
         let options = WindowOptions {
-            window_min_size: Some(size(px(400.0), px(300.0))),
+            window_min_size: Some(size(px(300.0), px(300.0))),
             app_id: Some("trans-gui".into()),
             kind: WindowKind::PopUp,
             focus: true,
