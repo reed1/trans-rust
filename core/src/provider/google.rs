@@ -5,7 +5,7 @@ use super::Provider;
 pub struct GoogleProvider;
 
 impl GoogleProvider {
-    fn parse_response(json: &serde_json::Value, query: &str) -> (Vec<SearchResult>, Option<String>) {
+    fn parse_response(json: &serde_json::Value, query: &str, source_lang: &str) -> (Vec<SearchResult>, Option<String>) {
         let mut results = Vec::new();
 
         // [1] — dictionary entries (from dt=bd)
@@ -58,6 +58,7 @@ impl GoogleProvider {
                         pos: pos.clone(),
                         pronunciation: String::new(),
                         source: "google".to_string(),
+                        source_lang: source_lang.to_string(),
                     });
                 }
             }
@@ -74,6 +75,7 @@ impl GoogleProvider {
                             pos: String::new(),
                             pronunciation: String::new(),
                             source: "google".to_string(),
+                            source_lang: source_lang.to_string(),
                         });
                     }
                 }
@@ -123,7 +125,7 @@ impl Provider for GoogleProvider {
             .read_to_string()
             .unwrap();
         let json: serde_json::Value = serde_json::from_str(&body).unwrap();
-        let (entries, did_you_mean) = Self::parse_response(&json, query);
+        let (entries, did_you_mean) = Self::parse_response(&json, query, sl);
 
         // Passthrough detection: input == output with no dictionary data means
         // Google didn't actually translate anything

@@ -7,4 +7,6 @@ edition = "2024"
 trans-core = { path = "../core" }
 gpui = "0.2.2"
 gpui-component = "0.5.1"
+rodio = "0.20"
 smol = "2"
+ureq = "3"

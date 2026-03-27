@@ -30,6 +30,7 @@ pub struct SearchResult {
     pub pos: String,
     pub pronunciation: String,
     pub source: String,
+    pub source_lang: String,
 }
 
 impl SearchIndex {
@@ -161,6 +162,7 @@ impl SearchIndex {
                     pos: get(self.pos),
                     pronunciation: get(self.pronunciation),
                     source: get(self.source),
+                    source_lang: get(self.source_lang),
                 }
             })
             .collect()

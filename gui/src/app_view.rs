@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +10,7 @@ use gpui_component::{ActiveTheme, Root, Theme};
 use trans_core::provider::{GoogleProvider, LocalProvider, Provider};
 use trans_core::search::SearchOutput;
 
-actions!(trans_gui, [ClearInput]);
+actions!(trans_gui, [ClearInput, PlayAudio]);
 
 const WINDOW_WIDTH: f32 = 800.0;
 const WINDOW_HEIGHT: f32 = 550.0;
@@ -22,6 +24,8 @@ struct AppView {
     scroll_handle: ScrollHandle,
     debounce_task: Option<Task<()>>,
     google_task: Option<Task<()>>,
+    audio_task: Option<Task<()>>,
+    audio_cache: Arc<std::sync::Mutex<HashMap<(String, String), Vec<u8>>>>,
     _subscription: Subscription,
 }
 
@@ -41,6 +45,7 @@ pub fn run() {
                 Some("Input"),
             ),
             KeyBinding::new("ctrl-l", ClearInput, None),
+            KeyBinding::new("ctrl-o", PlayAudio, None),
         ]);
 
         let options = WindowOptions {
@@ -78,6 +83,8 @@ impl AppView {
             scroll_handle: ScrollHandle::new(),
             debounce_task: None,
             google_task: None,
+            audio_task: None,
+            audio_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
             _subscription: subscription,
         }
     }
@@ -167,6 +174,49 @@ impl AppView {
         }));
     }
 
+    fn play_audio(&mut self, _: &PlayAudio, _window: &mut Window, cx: &mut Context<Self>) {
+        let query = self.input.read(cx).value().to_string();
+        if query.is_empty() {
+            return;
+        }
+
+        let lang = self
+            .output
+            .as_ref()
+            .and_then(|o| o.entries.first())
+            .map(|e| e.source_lang.clone())
+            .unwrap_or_else(|| "en".to_string());
+
+        let cache = Arc::clone(&self.audio_cache);
+        let key = (query.clone(), lang.clone());
+
+        self.audio_task = Some(cx.spawn(async move |_weak, _cx| {
+            let mp3 = {
+                let cached = cache.lock().unwrap().get(&key).cloned();
+                if let Some(data) = cached {
+                    data
+                } else {
+                    let data = smol::unblock({
+                        let key = key.clone();
+                        move || fetch_tts(&key.0, &key.1)
+                    })
+                    .await;
+                    cache.lock().unwrap().insert(key, data.clone());
+                    data
+                }
+            };
+
+            smol::unblock(move || {
+                let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
+                let source = rodio::Decoder::new(Cursor::new(mp3)).unwrap();
+                let sink = rodio::Sink::try_new(&handle).unwrap();
+                sink.append(source);
+                sink.sleep_until_end();
+            })
+            .await;
+        }));
+    }
+
     fn clear_input(&mut self, _: &ClearInput, window: &mut Window, cx: &mut Context<Self>) {
         self.input
             .update(cx, |input, cx| input.set_value("", window, cx));
@@ -205,6 +255,7 @@ impl Render for AppView {
             .bg(theme.background)
             .text_color(theme.foreground)
             .on_action(cx.listener(Self::clear_input))
+            .on_action(cx.listener(Self::play_audio))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 log!(
                     "key_down: key={:?} ctrl={}",
@@ -346,4 +397,18 @@ impl AppView {
                 .bg(theme.muted_foreground),
         )
     }
+}
+
+fn fetch_tts(text: &str, lang: &str) -> Vec<u8> {
+    log!("tts fetch: text={:?} lang={:?}", text, lang);
+    ureq::get("https://translate.google.com/translate_tts")
+        .query("ie", "UTF-8")
+        .query("client", "tw-ob")
+        .query("tl", lang)
+        .query("q", text)
+        .call()
+        .unwrap()
+        .body_mut()
+        .read_to_vec()
+        .unwrap()
 }
