@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::*;
@@ -28,7 +29,7 @@ macro_rules! log {
 struct AppView {
     input: Entity<InputState>,
     output: Option<SearchOutput>,
-    provider: LocalProvider,
+    provider: Arc<LocalProvider>,
     scroll_handle: ScrollHandle,
     debounce_task: Option<Task<()>>,
     google_task: Option<Task<()>>,
@@ -46,10 +47,15 @@ impl AppView {
                     let text = input_entity.read(cx).value().to_string();
                     this.google_task = None;
                     if text.len() >= LOCAL_MIN_LENGTH {
+                        let provider = Arc::clone(&this.provider);
                         this.debounce_task = Some(cx.spawn(async move |weak, cx| {
                             Timer::after(Duration::from_millis(300)).await;
+                            let output = smol::unblock(move || {
+                                log!("local search: {:?}", text);
+                                provider.search(&text, ("", ""))
+                            }).await;
                             weak.update(cx, |this, cx| {
-                                this.output = Some(this.provider.search(&text, ("", "")));
+                                this.output = Some(output);
                                 this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
                                 cx.notify();
                             })
@@ -66,26 +72,30 @@ impl AppView {
                     if !text.is_empty() {
                         let query = text.clone();
                         this.google_task = Some(cx.spawn(async move |weak, cx| {
-                            let q1 = query.clone();
-                            let q2 = query.clone();
-                            let (id_en, en_id) = std::thread::scope(|s| {
-                                let h1 = s.spawn(move || GoogleProvider.search(&q1, ("id", "en")));
-                                let h2 = s.spawn(move || GoogleProvider.search(&q2, ("en", "id")));
-                                (h1.join().ok(), h2.join().ok())
-                            });
-                            let id_en = id_en.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
-                            let en_id = en_id.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
-                            let mut entries = id_en.entries;
-                            entries.extend(en_id.entries);
-                            let output = SearchOutput {
-                                query: query.clone(),
-                                exact: id_en.exact && en_id.exact,
-                                suggestion: id_en.suggestion.or(en_id.suggestion),
-                                entries,
-                            };
+                            let query_check = query.clone();
+                            let output = smol::unblock(move || {
+                                log!("google search: {:?}", query);
+                                let q1 = query.clone();
+                                let q2 = query.clone();
+                                let (id_en, en_id) = std::thread::scope(|s| {
+                                    let h1 = s.spawn(move || GoogleProvider.search(&q1, ("id", "en")));
+                                    let h2 = s.spawn(move || GoogleProvider.search(&q2, ("en", "id")));
+                                    (h1.join().ok(), h2.join().ok())
+                                });
+                                let id_en = id_en.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
+                                let en_id = en_id.unwrap_or_else(|| SearchOutput { query: query.clone(), exact: true, suggestion: None, entries: vec![] });
+                                let mut entries = id_en.entries;
+                                entries.extend(en_id.entries);
+                                SearchOutput {
+                                    query,
+                                    exact: id_en.exact && en_id.exact,
+                                    suggestion: id_en.suggestion.or(en_id.suggestion),
+                                    entries,
+                                }
+                            }).await;
                             weak.update(cx, |this, cx| {
                                 let current = this.input.read(cx).value().to_string();
-                                if current == query {
+                                if current == query_check {
                                     this.output = Some(output);
                                     this.scroll_handle.set_offset(point(px(0.0), px(0.0)));
                                     cx.notify();
@@ -102,7 +112,7 @@ impl AppView {
         AppView {
             input,
             output: None,
-            provider: LocalProvider::new(),
+            provider: Arc::new(LocalProvider::new()),
             scroll_handle: ScrollHandle::new(),
             debounce_task: None,
             google_task: None,
