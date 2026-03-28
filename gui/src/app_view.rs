@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -208,11 +207,17 @@ impl AppView {
             };
 
             smol::unblock(move || {
-                let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
-                let source = rodio::Decoder::new(Cursor::new(mp3)).unwrap();
-                let sink = rodio::Sink::try_new(&handle).unwrap();
-                sink.append(source);
-                sink.sleep_until_end();
+                use std::process::{Command, Stdio};
+                use std::io::Write;
+                let mut child = Command::new("mpv")
+                    .args(["--no-terminal", "--no-video", "--volume=140", "-"])
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap();
+                child.stdin.take().unwrap().write_all(&mp3).unwrap();
+                child.wait().unwrap();
             })
             .await;
         }));
