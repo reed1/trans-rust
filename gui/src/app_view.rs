@@ -291,7 +291,7 @@ impl Render for AppView {
                 }
                 if event.keystroke.modifiers.control {
                     match event.keystroke.key.as_str() {
-                        "q" => cx.quit(),
+                        "d" => cx.quit(),
                         "u" => {
                             log!("scroll_up: offset={:?}", this.scroll_handle.offset());
                             this.scroll_by(SCROLL_AMOUNT, cx);
