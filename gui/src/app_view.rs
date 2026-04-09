@@ -291,14 +291,18 @@ impl Render for AppView {
                 }
                 if event.keystroke.modifiers.control {
                     match event.keystroke.key.as_str() {
-                        "q" => cx.quit(),
+                        "q" | "c" => cx.quit(),
+                        "d" => {
+                            if this.input.read(cx).value().is_empty() {
+                                cx.quit();
+                            } else {
+                                log!("scroll_down: offset={:?}", this.scroll_handle.offset());
+                                this.scroll_by(-SCROLL_AMOUNT, cx);
+                            }
+                        }
                         "u" => {
                             log!("scroll_up: offset={:?}", this.scroll_handle.offset());
                             this.scroll_by(SCROLL_AMOUNT, cx);
-                        }
-                        "d" => {
-                            log!("scroll_down: offset={:?}", this.scroll_handle.offset());
-                            this.scroll_by(-SCROLL_AMOUNT, cx);
                         }
                         _ => {}
                     }
