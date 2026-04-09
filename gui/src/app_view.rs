@@ -9,7 +9,7 @@ use gpui_component::{ActiveTheme, Root, Theme};
 use trans_core::provider::{GoogleProvider, LocalProvider, Provider};
 use trans_core::search::SearchOutput;
 
-actions!(trans_gui, [ClearInput, PlayAudio, ApplySuggestion]);
+actions!(trans_gui, [ClearInput, PlayAudio, PlayAudioAlt, ApplySuggestion]);
 
 const WINDOW_WIDTH: f32 = 800.0;
 const WINDOW_HEIGHT: f32 = 550.0;
@@ -45,6 +45,7 @@ pub fn run() {
             ),
             KeyBinding::new("ctrl-l", ClearInput, None),
             KeyBinding::new("ctrl-o", PlayAudio, None),
+            KeyBinding::new("ctrl-shift-o", PlayAudioAlt, None),
             KeyBinding::new("ctrl-m", ApplySuggestion, None),
         ]);
 
@@ -175,17 +176,35 @@ impl AppView {
     }
 
     fn play_audio(&mut self, _: &PlayAudio, _window: &mut Window, cx: &mut Context<Self>) {
+        self.speak(false, cx);
+    }
+
+    fn play_audio_alt(&mut self, _: &PlayAudioAlt, _window: &mut Window, cx: &mut Context<Self>) {
+        self.speak(true, cx);
+    }
+
+    fn speak(&mut self, flip: bool, cx: &mut Context<Self>) {
         let query = self.input.read(cx).value().to_string();
         if query.is_empty() {
             return;
         }
 
-        let lang = self
+        let base_lang = self
             .output
             .as_ref()
             .and_then(|o| o.entries.first())
             .map(|e| e.source_lang.clone())
             .unwrap_or_else(|| "en".to_string());
+
+        let lang = if flip {
+            match base_lang.as_str() {
+                "en" => "id".to_string(),
+                "id" => "en".to_string(),
+                other => panic!("Unexpected source_lang: {}", other),
+            }
+        } else {
+            base_lang
+        };
 
         let cache = Arc::clone(&self.audio_cache);
         let key = (query.clone(), lang.clone());
@@ -279,6 +298,7 @@ impl Render for AppView {
             .text_color(theme.foreground)
             .on_action(cx.listener(Self::clear_input))
             .on_action(cx.listener(Self::play_audio))
+            .on_action(cx.listener(Self::play_audio_alt))
             .on_action(cx.listener(Self::apply_suggestion))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 log!(
